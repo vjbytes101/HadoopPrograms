@@ -1,0 +1,85 @@
+package directories;
+
+
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.fs.Path;
+
+
+public class PhraseCount {
+	
+	public static class TokenizedMapper extends Mapper<Object,Text,Text,IntWritable>{
+
+		public void map(Object key, Text value,Context context) throws IOException,InterruptedException {
+			
+			String cleanLine = value.toString().toLowerCase().replaceAll("[^a-zA-Z0-9]"," "); 
+			String[] word = cleanLine.split(" ");
+			String[] wordpair = new String[word.length];
+			for(int i = 0; i<word.length-1;i++){
+				String wordp = word[i] + " " + word[i+1];
+				wordpair[i] = wordp;
+			}
+			for(int i =0;i<wordpair.length-1;i++) {
+				Text result = new Text(wordpair[i]);
+				context.write(result, new IntWritable(1));
+			}
+		}
+		
+	}
+	public static class SumReducer extends Reducer<Text,IntWritable,Text,IntWritable>{
+		
+		private IntWritable result = new IntWritable();
+		public void reduce(Text key, Iterable<IntWritable> values,Context context) throws IOException,InterruptedException {
+			int sum=0;
+			// TODO Auto-generated method stub
+			for(IntWritable x: values)
+			{
+				sum+=x.get();
+			}
+			result.set(sum);
+			context.write(key, result);
+			
+		}
+		
+	}
+	
+	public static void main(String[] args) throws Exception {
+		// Configuration
+		Configuration conf= new Configuration();
+		if(args.length != 2){
+			System.err.println("Usage:Phrasecount<in><out>");
+			System.exit(2);
+		}
+		@SuppressWarnings("deprecation")
+		Job job = new Job(conf,"phrase count");
+		job.setJarByClass(PhraseCount.class);
+		job.setMapperClass(TokenizedMapper.class);
+		job.setReducerClass(SumReducer.class);
+
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(IntWritable.class);
+		
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
+
+		Path outputPath = new Path(args[1]);
+	        
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		//deleting the output path automatically from hdfs so that we don't have delete it explicitly
+		outputPath.getFileSystem(conf).delete(outputPath);
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
