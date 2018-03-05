@@ -1,0 +1,90 @@
+package directories;
+
+
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.fs.Path;
+
+
+public class MaxTemp {
+	
+	public static class TokenizedMapper extends Mapper<LongWritable,Text,Text,IntWritable>{
+
+		Text year= new Text();
+		private IntWritable temp = new IntWritable();
+		public void map(LongWritable key, Text value,Context context) throws IOException,InterruptedException {
+			
+			String line = value.toString();
+			StringTokenizer tokenizer = new StringTokenizer(line);
+
+			while (tokenizer.hasMoreTokens()) {
+				String nxtword = tokenizer.nextToken();
+				year.set(nxtword); 
+				String nxtword1 = tokenizer.nextToken();
+				temp.set(Integer.parseInt(nxtword1));
+				context.write(year, temp);
+			}
+		}
+		
+	}
+	public static class SumReducer extends Reducer<Text,IntWritable,Text,IntWritable>{
+		
+		private IntWritable result = new IntWritable();
+		public void reduce(Text key, Iterable<IntWritable> values,Context context) throws IOException,InterruptedException {
+			int sum=0;
+			// TODO Auto-generated method stub
+			for(IntWritable x: values)
+			{
+				int val = x.get();
+				if(sum<val){
+					sum = val;
+				}
+			}
+			result.set(sum);
+			context.write(key, result);
+			
+		}
+		
+	}
+	
+	public static void main(String[] args) throws Exception {
+		// Configuration
+		Configuration conf= new Configuration();
+		if(args.length != 2){
+			System.err.println("Usage:MaxTemp<in><out>");
+			System.exit(2);
+		}
+		@SuppressWarnings("deprecation")
+		Job job = new Job(conf,"MaxTemp per year");
+		job.setJarByClass(PhraseCount.class);
+		job.setMapperClass(TokenizedMapper.class);
+		job.setReducerClass(SumReducer.class);
+		job.setMapOutputKeyClass(Text.class);
+		job.setMapOutputValueClass(IntWritable.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(IntWritable.class);
+		
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
+
+		Path outputPath = new Path(args[1]);
+	        
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		//deleting the output path automatically from hdfs so that we don't have delete it explicitly
+		outputPath.getFileSystem(conf).delete(outputPath);
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
