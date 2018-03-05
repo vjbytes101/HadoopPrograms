@@ -1,0 +1,84 @@
+package directories;
+
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.fs.Path;
+
+
+public class WordCount {
+	
+	public static class TokenizedMapper extends Mapper<LongWritable,Text,Text,IntWritable>{
+
+		public void map(LongWritable key, Text value,Context context) throws IOException,InterruptedException {
+			
+			String line = value.toString();
+			StringTokenizer tokenizer = new StringTokenizer(line);
+
+			while (tokenizer.hasMoreTokens()) {
+				value.set(tokenizer.nextToken());
+				context.write(value, new IntWritable(1));
+			}
+	
+			
+		}
+		
+	}
+	public static class SumReducer extends Reducer<Text,IntWritable,Text,IntWritable>{
+
+		public void reduce(Text key, Iterable<IntWritable> values,Context context) throws IOException,InterruptedException {
+			int sum=0;
+			// TODO Auto-generated method stub
+			for(IntWritable x: values)
+			{
+				sum+=x.get();
+			}
+			context.write(key, new IntWritable(sum));
+			
+		}
+		
+	}
+	
+	public static void main(String[] args) throws Exception {
+		// Configuration
+		Configuration conf= new Configuration();
+		Job job = new Job(conf,"mywc");
+		job.setJarByClass(WordCount.class);
+		conf.set("mapreduce.jobtracker.address", "local");
+		job.setMapperClass(TokenizedMapper.class);
+		job.setReducerClass(SumReducer.class);
+
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(IntWritable.class);
+		
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
+
+		
+		//Debug in local
+		String inpath = "/home/edureka/Desktop/data/first.txt";
+		String out = "/home/edureka/Desktop/data/output/out";
+		Path outputPath = new Path(out);
+	    //File input with hadoop
+		//Path outputPath = new Path(args[1]);
+	    //FileInputFormat.addInputPath(job, new Path(args[0]));
+	    //FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		//File input local    
+	    FileInputFormat.addInputPath(job, new Path(inpath));
+	    FileOutputFormat.setOutputPath(job, new Path(out));
+		//deleting the output path automatically from hdfs so that we don't have delete it explicitly
+		outputPath.getFileSystem(conf).delete(outputPath);
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
