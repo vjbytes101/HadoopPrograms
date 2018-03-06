@@ -1,0 +1,83 @@
+package directories;
+
+
+import java.io.IOException;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.fs.Path;
+
+
+public class HotColdDays {
+	
+	public static class TokenizedMapper extends Mapper<LongWritable,Text,Text,Text>{
+
+		public void map(LongWritable key, Text value,Context context) throws IOException,InterruptedException {
+			
+			String line = value.toString();
+			String date = line.substring(6, 14);
+			float temp_Max = Float.parseFloat(line.substring(39, 45).trim());
+			float temp_Min = Float.parseFloat(line.substring(47, 53).trim());
+			
+			if(temp_Max > 40){
+				context.write(new Text(date),new Text("Hot Day"));
+			}
+			if(temp_Min < 10){
+				context.write(new Text(date),new Text("Cold Day"));
+			}
+		}
+		
+	}
+	public static class SumReducer extends Reducer<Text,Text,Text,Text>{
+		
+		public void reduce(Text key, Iterable<Text> values,Context context) throws IOException,InterruptedException {
+			// TODO Auto-generated method stub
+			for(Text x: values)
+			{
+				Text temperature = x;
+				context.write(key, temperature);
+			}
+			//context.write
+			//result.set(sum);
+			
+			
+		}
+		
+	}
+	
+	public static void main(String[] args) throws Exception {
+		// Configuration
+		Configuration conf= new Configuration();
+		if(args.length != 2){
+			System.err.println("Usage:MaxTemp<in><out>");
+			System.exit(2);
+		}
+		@SuppressWarnings("deprecation")
+		Job job = new Job(conf,"MaxTemp per year");
+		job.setJarByClass(PhraseCount.class);
+		job.setMapperClass(TokenizedMapper.class);
+		job.setReducerClass(SumReducer.class);
+		job.setMapOutputKeyClass(Text.class);
+		job.setMapOutputValueClass(Text.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(Text.class);
+		
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
+
+		Path outputPath = new Path(args[1]);
+	        
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		//deleting the output path automatically from hdfs so that we don't have delete it explicitly
+		outputPath.getFileSystem(conf).delete(outputPath);
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
