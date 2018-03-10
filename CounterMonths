@@ -1,0 +1,72 @@
+package advancemapreduce;
+
+import java.io.IOException;
+import java.util.Date;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.Counters;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+
+public class Maponly {
+
+	public static enum MONTH{
+		DEC,
+		JAN,
+		FEB
+	};
+	
+	public static class TokenizedMapper extends Mapper<LongWritable,Text,Text,Text>{
+
+		Text out= new Text();
+		public void map(LongWritable key, Text value,Context context) throws IOException,InterruptedException {
+			
+			String line = value.toString();
+			String[] lsplit = line.split(",");
+			long ldt = Long.parseLong(lsplit[1]);
+			Date dt = new Date(ldt);
+			int m = dt.getMonth();
+			if(m==11){
+        		context.getCounter(MONTH.DEC).increment(10);	
+        	}
+        	if(m==0){      	  	
+      	  		context.getCounter(MONTH.JAN).increment(20);
+        	}
+        	if(m==1){
+      	  		context.getCounter(MONTH.FEB).increment(30);
+        	}
+      	  	out.set("success");
+      	  	context.write(out, out);
+		}
+		
+	}
+	
+	public static void main(String[] args) throws Exception {
+		Job job = new Job();
+	    job.setJarByClass(Maponly.class);
+	    job.setJobName("CounterTest");
+	    job.setNumReduceTasks(0);
+	    job.setMapperClass(TokenizedMapper.class);
+	    job.setMapOutputKeyClass(Text.class);
+	    job.setMapOutputValueClass(Text.class);
+	    
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+	    
+	    job.waitForCompletion(true);
+	    
+	    Counters counter = job.getCounters();
+	    
+	    Counter cr1 = counter.findCounter(MONTH.DEC);
+	    System.out.println(cr1.getDisplayName() + " : " + cr1.getValue());
+	    Counter cr2 = counter.findCounter(MONTH.FEB);
+	    System.out.println(cr2.getDisplayName() + " : " + cr2.getValue());
+	    Counter cr3 = counter.findCounter(MONTH.JAN);
+	    System.out.println(cr3.getDisplayName() + " : " + cr3.getValue());
+	}
+}
