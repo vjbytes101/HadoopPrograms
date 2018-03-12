@@ -1,0 +1,71 @@
+package joins;
+
+import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class MyReducerJoin{ 
+
+	public static class CustMapper extends Mapper<Object,Text, Text, Text> {
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException{
+			String record = value.toString();
+			String parts[] = record.split(",");
+			context.write(new Text(parts[0]), new Text("cust\t"+parts[1]));
+		}
+	}
+	
+	public static class TxnMapper extends Mapper<Object, Text, Text, Text>{
+		public void map(Object key, Text value,Context context) throws IOException,InterruptedException{
+			String record = value.toString();
+			String parts[] = record.split(",");
+			context.write(new Text(parts[2]), new Text("txn\t"+parts[3]));
+		}
+	}
+	
+	public static class MyReducer extends Reducer<Text, Text, Text, Text>{
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException,InterruptedException{
+			Text name = new Text();
+			Text totalc = new Text();
+			int count = 0;
+			double total = 0.0;
+			for(Text r: values){
+				String parts[] = r.toString().split("\t");
+				if(parts[0].equals("txn")){
+					count++;
+					total += Float.parseFloat(parts[1]);
+				}else if(parts[0].equals("cust")){
+					name.set(parts[1]);
+				}
+			}
+			String str = String.format("%d\t%f", count,total);
+			totalc.set(str);
+			context.write(name, totalc);
+		}
+	}
+
+	public static void main(String[] args) throws Exception {
+		Configuration conf = new Configuration();
+		Job job = new Job(conf, "Reduce-side join");
+		job.setJarByClass(MyReducerJoin.class);
+		job.setReducerClass(MyReducer.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(Text.class);
+		
+	
+		MultipleInputs.addInputPath(job, new Path(args[0]),TextInputFormat.class, CustMapper.class);
+		MultipleInputs.addInputPath(job, new Path(args[1]),TextInputFormat.class, TxnMapper.class);
+		Path outputPath = new Path(args[2]);
+		
+		
+		FileOutputFormat.setOutputPath(job, outputPath);
+		outputPath.getFileSystem(conf).delete(outputPath);
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
