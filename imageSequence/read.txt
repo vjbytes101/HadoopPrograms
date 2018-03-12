@@ -1,0 +1,1 @@
+Attached file for processing image file using map reduce and remove duplicate images from the list
